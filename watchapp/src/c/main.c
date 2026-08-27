@@ -159,6 +159,17 @@ static void handle_connection(bool connected) {
   // keepalive forever just so the watch could conclude nothing had changed.
   APP_LOG(APP_LOG_LEVEL_DEBUG, "link %s", connected ? "up" : "down");
   ride_set_link(connected);
+
+  if (connected) {
+    // Ask for everything again. The launch SYNC in comm_init only helps if the
+    // companion happened to be alive at that moment, and it often is not: the
+    // phone service is bound to an open activity or a running ride, not to the
+    // watchapp. Without this, a rider who changes units on the phone and then
+    // brings the watch back into range keeps displaying the old ones until the
+    // next ride starts, because nothing ever asks again.
+    comm_send_cmd(CMD_SYNC, 0);
+  }
+
   ui_refresh();
 }
 

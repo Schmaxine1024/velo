@@ -258,6 +258,19 @@ public class RideService extends Service implements PebbleBridge.CommandListener
         // Idle rides send nothing on a timer, so push one frame now or the
         // watch would not see a colour change until the next ride started.
         pushTelemetry();
+
+        // That frame goes nowhere if the watchapp is not running: an AppMessage
+        // needs a live app on the other end, and it is not retried. Bringing it
+        // up makes the change land, and does so without a second push -- the
+        // watchapp sends CMD_SYNC as it starts, and this service, which is
+        // alive precisely because a settings screen is bound to it, answers
+        // with the settings attached.
+        //
+        // Not mid-ride: there the watchapp is already running, and relaunching
+        // it would throw away the screen the rider is looking at.
+        if (!recording) {
+            bridge.launchWatchapp();
+        }
     }
 
     // ---- Commands from the watch -----------------------------------------
