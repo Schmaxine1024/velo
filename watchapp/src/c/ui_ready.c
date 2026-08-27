@@ -18,7 +18,13 @@ static void canvas_update(Layer *layer, GContext *ctx) {
 
   // in_ride = false: no state word, and the headline below owns the link state.
   int16_t top = ui_draw_status(ctx, bounds, r, false);
-  int16_t rest = bounds.size.h - (top - bounds.origin.y);
+  // The hint block is only reserved on round. On rect the headline and last-ride
+  // percentages below already leave roughly a footer's worth of slack at the
+  // bottom, and subtracting it there would shift a layout that is correct.
+  // Round needs two hint lines well clear of the rim, which is more slack than
+  // that remainder, so the content has to be laid out above it explicitly.
+  int16_t rest = bounds.size.h - (top - bounds.origin.y)
+                 - PBL_IF_RECT_ELSE(0, FOOTER_H);
   const int16_t pad = PBL_IF_RECT_ELSE(4, 20);
 
   // ---- Readiness, stated in words -------------------------------------
@@ -44,12 +50,16 @@ static void canvas_update(Layer *layer, GContext *ctx) {
     ready = true;
   }
 
-  int16_t head_h = rest * 38 / 100;
+  // Round gets a bigger share for both blocks than rect does. Rect has slack at
+  // the bottom to absorb a block whose content slightly exceeds its share;
+  // round does not, because the hint block below is already pinned off the rim.
+  int16_t head_h = rest * PBL_IF_RECT_ELSE(38, 55) / 100;
   // Inset and gapped so the panel floats below the status band rather than
   // butting into it. Applied whether or not it is filled, so the headline
   // does not shift position when the state changes.
-  GRect head_box = GRect(bounds.origin.x + PANEL_INSET, top + PANEL_GAP,
-                         bounds.size.w - 2 * PANEL_INSET, head_h - PANEL_GAP);
+  GRect head_box = ui_fit_round(
+      GRect(bounds.origin.x + PANEL_INSET, top + PANEL_GAP,
+            bounds.size.w - 2 * PANEL_INSET, head_h - PANEL_GAP), bounds);
 
   // Readiness gets the loud treatment when something is wrong: a full panel
   // of accent, so "NO GPS" is unmissable before you clip in. When everything
@@ -67,7 +77,7 @@ static void canvas_update(Layer *layer, GContext *ctx) {
 
   // ---- Last ride -------------------------------------------------------
   int16_t last_y = top + head_h;
-  int16_t last_h = rest * 40 / 100;
+  int16_t last_h = rest * PBL_IF_RECT_ELSE(40, 42) / 100;
   const RideSummary *last = ride_history_at(0);
 
   if (last) {
@@ -82,13 +92,17 @@ static void canvas_update(Layer *layer, GContext *ctx) {
              fmt_distance_unit(ride_imperial()));
     snprintf(label, sizeof(label), "LAST %s", date);
 
-    ui_draw_metric(ctx, GRect(bounds.origin.x, last_y, bounds.size.w, last_h),
+    ui_draw_metric(ctx,
+                   ui_fit_round(GRect(bounds.origin.x, last_y,
+                                      bounds.size.w, last_h), bounds),
                    label, value, NULL, ui_font_value(), COL_MUTED, COL_INK);
   } else {
     graphics_context_set_text_color(ctx, COL_MUTED);
     graphics_draw_text(ctx, "No rides yet", ui_font_label(),
-                       GRect(bounds.origin.x + pad, last_y + last_h / 2 - 10,
-                             bounds.size.w - 2 * pad, 20),
+                       ui_fit_round(
+                           GRect(bounds.origin.x + pad,
+                                 last_y + last_h / 2 - 10,
+                                 bounds.size.w - 2 * pad, 20), bounds),
                        GTextOverflowModeTrailingEllipsis,
                        GTextAlignmentCenter, NULL);
   }
@@ -96,14 +110,36 @@ static void canvas_update(Layer *layer, GContext *ctx) {
   // ---- Hints -----------------------------------------------------------
   int16_t hint_y = bounds.origin.y + bounds.size.h - FOOTER_H;
   graphics_context_set_text_color(ctx, COL_MUTED);
+  const bool have_history = ride_history_count() > 0;
+
+#if defined(PBL_ROUND)
+  // Two lines rather than one. "SELECT ride   UP history" needs about 168px and
+  // the chord this far down a 180px display is nearer 140, so the single-line
+  // version ellipsised away the half that teaches the UP button. Each line is
+  // fitted separately because the lower one has less room than the upper.
+  graphics_draw_text(ctx, have_history ? "SELECT ride" : "SELECT to ride",
+                     ui_font_label(),
+                     ui_fit_round(GRect(bounds.origin.x, hint_y,
+                                        bounds.size.w, LABEL_H), bounds),
+                     GTextOverflowModeTrailingEllipsis,
+                     GTextAlignmentCenter, NULL);
+  if (have_history) {
+    graphics_draw_text(ctx, "UP history", ui_font_label(),
+                       ui_fit_round(GRect(bounds.origin.x, hint_y + LABEL_H,
+                                          bounds.size.w, LABEL_H), bounds),
+                       GTextOverflowModeTrailingEllipsis,
+                       GTextAlignmentCenter, NULL);
+  }
+#else
   graphics_draw_text(ctx,
-                     ride_history_count() > 0 ? "SELECT ride   UP history"
-                                              : "SELECT to ride",
+                     have_history ? "SELECT ride   UP history"
+                                  : "SELECT to ride",
                      ui_font_label(),
                      GRect(bounds.origin.x + pad, hint_y,
                            bounds.size.w - 2 * pad, FOOTER_H),
                      GTextOverflowModeTrailingEllipsis,
                      GTextAlignmentCenter, NULL);
+#endif
 }
 
 // ---------------------------------------------------------------------------

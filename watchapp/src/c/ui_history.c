@@ -23,12 +23,19 @@ static uint16_t num_rows(MenuLayer *menu, uint16_t section, void *ctx) {
 }
 
 static int16_t header_height(MenuLayer *menu, uint16_t section, void *ctx) {
-  return MENU_CELL_BASIC_HEADER_HEIGHT;
+  // No section headers on round. menu_cell_basic_header_draw lays its text out
+  // left-aligned at a fixed inset, which on a circular display is past the edge
+  // of the glass near the top -- "Rides" came out with its first letters sliced
+  // off. The screen is entered from a hint that already says "UP history", and
+  // the clear row names itself, so the headers are not carrying much here.
+  return PBL_IF_RECT_ELSE(MENU_CELL_BASIC_HEADER_HEIGHT, 0);
 }
 
 static void draw_header(GContext *ctx, const Layer *cell, uint16_t section, void *c) {
+#if defined(PBL_RECT)
   menu_cell_basic_header_draw(ctx, cell,
       (section == SECTION_RIDES) ? "Rides" : "Manage");
+#endif
 }
 
 static void draw_row(GContext *ctx, const Layer *cell, MenuIndex *idx, void *c) {

@@ -98,23 +98,45 @@ static void canvas_update(Layer *layer, GContext *ctx) {
   }
   fmt_speed(avg, sizeof(avg), avg_cms, imp);
 
-  // Inset within its cell so the card has air around it and does not run into
-  // the date above or the edge of the screen beside it.
-  GRect dist_box = GRect(bounds.origin.x + PANEL_INSET, top + 3,
-                         col_w - 2 * PANEL_INSET, row_h - 6);
+  // The chip takes the full cell height, and air comes from PANEL_INSET on the
+  // sides only. It used to be inset 3px top and bottom as well, which cost it
+  // 6px it could not spare: ui_draw_metric centres label-plus-value in the box
+  // and clamps to the top when they do not fit, so on the 40px cells (basalt,
+  // diorite, chalk) the value's ink ran past the chip's lower edge. That did
+  // not clip -- the text is theme_on_accent() white and the background is
+  // white, so the overhang simply vanished. The inset also pushed this cell's
+  // label 3px below TIME's beside it.
+  // Each row is fitted to the round chord as a whole and then split into
+  // columns. Fitting the cells individually would pull each toward the centre
+  // by a different amount and DIST would stop lining up with TIME beside it.
+  const GRect row0 = ui_fit_round(
+      GRect(bounds.origin.x, top, bounds.size.w, row_h), bounds);
+  const GRect row1 = ui_fit_round(
+      GRect(bounds.origin.x, top + row_h, bounds.size.w, row_h), bounds);
+  const GRect row2 = ui_fit_round(
+      GRect(bounds.origin.x, top + 2 * row_h, bounds.size.w, row_h), bounds);
+  const int16_t c0 = row0.size.w / 2;
+  const int16_t c1 = row1.size.w / 2;
+
+  // A smaller inset on round: ui_fit_round has already pulled the row inside the
+  // glass, so PANEL_INSET's full 14px on top of that is not buying safety, it is
+  // just starving the chip -- enough to ellipsise "DIST KM" on chalk.
+  const int16_t chip_inset = PBL_IF_RECT_ELSE(PANEL_INSET, 4);
+  GRect dist_box = GRect(row0.origin.x + chip_inset, row0.origin.y,
+                         c0 - 2 * chip_inset, row_h);
   ui_fill(ctx, dist_box, COL_ACCENT, PANEL_RADIUS);
   ui_draw_metric(ctx, dist_box, "DIST", dist, fmt_distance_unit(imp),
-                 ui_font_value(), theme_on_accent(), theme_on_accent());
-  ui_draw_metric(ctx, GRect(bounds.origin.x + col_w, top, col_w, row_h),
-                 "TIME", dur, NULL, ui_font_value(), COL_MUTED, COL_INK);
+                 ui_font_summary_value(), theme_on_accent(), theme_on_accent());
+  ui_draw_metric(ctx, GRect(row0.origin.x + c0, row0.origin.y, c0, row_h),
+                 "TIME", dur, NULL, ui_font_summary_value(), COL_MUTED, COL_INK);
 
-  ui_draw_metric(ctx, GRect(bounds.origin.x, top + row_h, col_w, row_h),
-                 "AVG", avg, fmt_speed_unit(imp), ui_font_value(), COL_MUTED, COL_INK);
-  ui_draw_metric(ctx, GRect(bounds.origin.x + col_w, top + row_h, col_w, row_h),
-                 "MAX", mx, fmt_speed_unit(imp), ui_font_value(), COL_MUTED, COL_INK);
+  ui_draw_metric(ctx, GRect(row1.origin.x, row1.origin.y, c1, row_h),
+                 "AVG", avg, fmt_speed_unit(imp), ui_font_summary_value(), COL_MUTED, COL_INK);
+  ui_draw_metric(ctx, GRect(row1.origin.x + c1, row1.origin.y, c1, row_h),
+                 "MAX", mx, fmt_speed_unit(imp), ui_font_summary_value(), COL_MUTED, COL_INK);
 
-  ui_draw_metric(ctx, GRect(bounds.origin.x, top + 2 * row_h, bounds.size.w, row_h),
-                 "ASCENT", asc, fmt_ascent_unit(imp), ui_font_value(), COL_MUTED, COL_INK);
+  ui_draw_metric(ctx, row2,
+                 "ASCENT", asc, fmt_ascent_unit(imp), ui_font_summary_value(), COL_MUTED, COL_INK);
 
   // ---- Footer ------------------------------------------------------------
   graphics_context_set_text_color(ctx, COL_MUTED);
@@ -124,9 +146,10 @@ static void canvas_update(Layer *layer, GContext *ctx) {
   graphics_draw_text(ctx,
                      s_from_history ? "SELECT to close" : "Saved",
                      ui_font_label(),
-                     GRect(bounds.origin.x + pad,
-                           bounds.origin.y + bounds.size.h - FOOTER_H,
-                           bounds.size.w - 2 * pad, FOOTER_H),
+                     ui_fit_round(
+                         GRect(bounds.origin.x + pad,
+                               bounds.origin.y + bounds.size.h - FOOTER_H,
+                               bounds.size.w - 2 * pad, LABEL_H), bounds),
                      GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
 }
 

@@ -107,7 +107,17 @@ static void canvas_update(Layer *layer, GContext *ctx) {
 
   int16_t top = ui_draw_status(ctx, bounds, r, true);
 
-  int16_t rest   = bounds.size.h - (top - bounds.origin.y);
+  // The ride screen has no footer, so on a rect display it runs to the bottom
+  // edge. On a round one that is exactly where the chord collapses to nothing,
+  // and the bottom cell row fitted to it would come out zero pixels wide and
+  // simply not be drawn. Give the last row somewhere to live.
+  //
+  // A sixth rather than an eighth, counter-intuitively, to make that row WIDER:
+  // reserving more at the rim lifts the row toward the middle of the glass,
+  // where the chord is longer. At an eighth chalk's cells came out 57px and
+  // ellipsised "AVG KM/H" to "AVG KM..."; at a sixth they are about 65px.
+  int16_t rest   = bounds.size.h - (top - bounds.origin.y)
+                   - PBL_IF_RECT_ELSE(0, bounds.size.h / 6);
   int16_t hero_h = rest * 52 / 100;   // the hero gets over half the screen
   int16_t cell_h = rest - hero_h;
   int16_t col_w  = bounds.size.w / GRID_CELLS;
@@ -122,8 +132,9 @@ static void canvas_update(Layer *layer, GContext *ctx) {
   // theme_on_accent() rather than a fixed white: the accent is the rider's
   // choice, and on a pale one white text would vanish. It also keeps diorite
   // honest, where the accent collapses to black.
-  GRect hero = GRect(bounds.origin.x + PANEL_INSET, top + PANEL_GAP,
-                     bounds.size.w - 2 * PANEL_INSET, hero_h - PANEL_GAP - 2);
+  GRect hero = ui_fit_round(
+      GRect(bounds.origin.x + PANEL_INSET, top + PANEL_GAP,
+            bounds.size.w - 2 * PANEL_INSET, hero_h - PANEL_GAP - 2), bounds);
   ui_fill(ctx, hero, COL_ACCENT, PANEL_RADIUS);
 
   GColor on = theme_on_accent();
@@ -136,8 +147,15 @@ static void canvas_update(Layer *layer, GContext *ctx) {
   // No divider between the cells, and no rules anywhere. Whitespace separates
   // them perfectly well at this size, and every hairline removed is one less
   // thing competing with the numbers for attention.
+  // The row is fitted as a whole and then divided, rather than each cell being
+  // fitted on its own: fitting them separately would pull each toward the
+  // centre by a different amount and the columns would stop lining up.
+  GRect grid = ui_fit_round(
+      GRect(bounds.origin.x, top + hero_h, bounds.size.w, cell_h), bounds);
+  col_w = grid.size.w / GRID_CELLS;
+
   for (int i = 0; i < GRID_CELLS; i++) {
-    GRect cell = GRect(bounds.origin.x + i * col_w, top + hero_h, col_w, cell_h);
+    GRect cell = GRect(grid.origin.x + i * col_w, grid.origin.y, col_w, cell_h);
     render_metric(cells[i], r, &label, value, sizeof(value), &unit);
     ui_draw_metric(ctx, cell, label, value, unit, ui_font_value(),
                    COL_MUTED, COL_INK);

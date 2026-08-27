@@ -51,6 +51,10 @@ void ui_draw_metric(GContext *ctx, GRect box, const char *label,
 // Fill `box` with `colour`, corners rounded by `radius` (0 for square).
 // Used for the accent panels the layout is built from -- big blocks of flat
 // colour rather than hairline-ruled cells.
+// Shrink a box horizontally so all of it lands on a round display. A no-op on
+// rect screens. See ui_common.c for why a constant inset cannot do this job.
+GRect ui_fit_round(GRect box, GRect bounds);
+
 void ui_fill(GContext *ctx, GRect box, GColor colour, int16_t radius);
 
 // Corner radius for the floating panels. Rounded because square-cornered
@@ -59,7 +63,15 @@ void ui_fill(GContext *ctx, GRect box, GColor colour, int16_t radius);
 
 // Height reserved for a footer line of label-font text. Must track the label
 // font: it grew, and the old hard-coded 18 started clipping descenders.
-#define FOOTER_H  PBL_IF_RECT_ELSE(22, 24)
+// Rect keeps a single line. Round reserves two, and sits well clear of the
+// bottom rim: the chord there is nearly zero, so a footer flush with the bottom
+// of a round display has no width to draw into at all. Two short centred lines
+// fit the chord where one long one cannot.
+// Height reserved for a metric's label line. Lives here rather than in
+// ui_common.c because the screens lay out footers and rows against it.
+#define LABEL_H  PBL_IF_RECT_ELSE(20, 18)
+
+#define FOOTER_H  PBL_IF_RECT_ELSE(22, 46)
 
 // Inset of a floating panel from the screen edge.
 #define PANEL_INSET   PBL_IF_RECT_ELSE(4, 14)
@@ -93,6 +105,7 @@ int16_t ui_draw_status(GContext *ctx, GRect bounds, const RideState *r,
 // numeric-subset fonts cannot be used, however inviting their size is.
 GFont ui_font_hero(void);
 GFont ui_font_value(void);
+GFont ui_font_summary_value(void);  // summary grid; see ui_common.c
 GFont ui_font_label(void);
 
 // ---------------------------------------------------------------------------
