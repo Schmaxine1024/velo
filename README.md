@@ -113,3 +113,5 @@ while a ride is live, against roughly a week idle. Two things keep that down:
 ## Possible future plans
 - Live Route
 - Heart Rate tracking
+
+THIS PROJECT IS ALMOST ENTIRELY VIBECODED!!
