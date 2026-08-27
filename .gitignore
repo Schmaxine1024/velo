@@ -17,3 +17,11 @@ __pycache__/
 
 # Crash logs dropped in for diagnosis; not source.
 Velo log *.txt
+
+# Signing material must never be committed. The keystore lives outside the
+# repo entirely (see RELEASING.md); these patterns are a second line of
+# defence in case one is ever copied in by accident.
+*.jks
+*.keystore
+keystore.base64
+password.txt

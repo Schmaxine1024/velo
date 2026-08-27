@@ -1,0 +1,88 @@
+name: CI
+
+# Every push and PR: compile the phone app and run the unit tests. This is the
+# cheap gate. Releases are a separate workflow triggered by a tag.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  android:
+    name: Build and test the companion app
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          # 21, not latest. The Android Gradle Plugin does not support JDK 25,
+          # which is what a bare "latest" would land on.
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build and test
+        working-directory: android
+        run: ./gradlew --no-daemon assembleDebug test
+
+      - name: Upload test results on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: android/app/build/reports/tests/
+
+  watchapp:
+    name: Build the watchapp
+    runs-on: ubuntu-latest
+    # Best effort. The Pebble SDK is unmaintained and its toolchain download
+    # comes from community mirrors, so this is allowed to fail without taking
+    # the run red -- the C is also compile-checked by the fmtcheck job below,
+    # which needs nothing but gcc.
+    continue-on-error: true
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install the Pebble tool
+        run: |
+          pipx install pebble-tool || pip install pebble-tool
+
+      - name: Install SDK
+        run: pebble sdk install latest --no-analytics || pebble sdk install latest
+
+      - name: Build
+        working-directory: watchapp
+        run: pebble build
+
+      - name: Upload pbw
+        uses: actions/upload-artifact@v4
+        with:
+          name: velo-pbw
+          path: watchapp/build/*.pbw
+
+  fmtcheck:
+    name: Phone and watch formatting agree
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compile the watch's fmt.c natively and diff against Java
+        run: |
+          # The phone deliberately reproduces the C's integer truncation. If
+          # the two ever diverge the same ride reads 0.99 mi on the watch and
+          # 1.00 mi on the phone, so this is worth a job of its own.
+          tools/fmtcheck/run.sh
+          git diff --exit-code tools/fmtcheck/c-output.txt \
+            || (echo "::error::fmt.c output changed; regenerate FormatTest.java" && exit 1)

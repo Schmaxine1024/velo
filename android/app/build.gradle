@@ -15,14 +15,37 @@ android {
         // Pebble anyway.
         minSdk 26
         targetSdk 35
-        versionCode 1
-        versionName "1.0"
+        // Overridden by CI from the git tag; see .github/workflows/release.yml.
+        // versionCode must increase on every published build or Obtainium (and
+        // Android itself) will not treat it as an update.
+        versionCode project.hasProperty('veloVersionCode')
+                ? project.veloVersionCode.toInteger() : 1
+        versionName project.hasProperty('veloVersionName')
+                ? project.veloVersionName : "1.0"
+    }
+
+    // Release signing, supplied by CI from repository secrets. Absent locally,
+    // in which case the release build falls back to the debug key so that
+    // `assembleRelease` still works on a developer machine -- it just produces
+    // something the phone will refuse to install over a CI build.
+    signingConfigs {
+        release {
+            def ks = System.getenv('VELO_KEYSTORE_PATH')
+            if (ks) {
+                storeFile file(ks)
+                storePassword System.getenv('VELO_KEYSTORE_PASSWORD')
+                keyAlias System.getenv('VELO_KEY_ALIAS')
+                keyPassword System.getenv('VELO_KEY_PASSWORD')
+            }
+        }
     }
 
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            signingConfig System.getenv('VELO_KEYSTORE_PATH')
+                    ? signingConfigs.release : signingConfigs.debug
         }
     }
 

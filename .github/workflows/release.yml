@@ -1,0 +1,123 @@
+name: Release
+
+# Tag-driven. `git tag v1.0.1 && git push --tags` publishes a release with a
+# signed APK attached, which is what Obtainium polls for.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish, without the leading v (e.g. 1.0.1)'
+        required: true
+
+permissions:
+  contents: write        # needed to create the release
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Work out the version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="${GITHUB_REF_NAME#v}"
+          fi
+
+          # versionCode has to increase monotonically or Android will not
+          # accept the build as an update. Derived from the version itself
+          # rather than from a run counter, so it is reproducible and cannot
+          # go backwards if the workflow is ever renamed or re-run.
+          #   1.2.3 -> 10203
+          MAJOR=$(echo "$VERSION" | cut -d. -f1)
+          MINOR=$(echo "$VERSION" | cut -d. -f2)
+          PATCH=$(echo "$VERSION" | cut -d. -f3)
+          CODE=$(( ${MAJOR:-0} * 10000 + ${MINOR:-0} * 100 + ${PATCH:-0} ))
+
+          echo "name=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "code=$CODE" >> "$GITHUB_OUTPUT"
+          echo "Publishing $VERSION (versionCode $CODE)"
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Restore the signing keystore
+        env:
+          KEYSTORE_B64: ${{ secrets.VELO_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KEYSTORE_B64" ]; then
+            echo "::error::VELO_KEYSTORE_BASE64 is not set."
+            echo "Without it the APK would be debug-signed, and every phone"
+            echo "that installed a previous release would reject this one as"
+            echo "a signature mismatch. Refusing to publish. See RELEASING.md."
+            exit 1
+          fi
+          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/velo-release.jks"
+
+      - name: Build the signed APK
+        working-directory: android
+        env:
+          VELO_KEYSTORE_PATH: ${{ runner.temp }}/velo-release.jks
+          VELO_KEYSTORE_PASSWORD: ${{ secrets.VELO_KEYSTORE_PASSWORD }}
+          VELO_KEY_ALIAS: ${{ secrets.VELO_KEY_ALIAS }}
+          VELO_KEY_PASSWORD: ${{ secrets.VELO_KEY_PASSWORD }}
+        run: |
+          ./gradlew --no-daemon assembleRelease \
+            -PveloVersionCode=${{ steps.version.outputs.code }} \
+            -PveloVersionName=${{ steps.version.outputs.name }}
+
+      - name: Confirm it is not debug-signed
+        run: |
+          # A belt-and-braces check. Shipping a debug-signed APK would break
+          # in-place updates for everyone who installed a real one, and the
+          # failure would only show up on someone's phone days later.
+          APK=android/app/build/outputs/apk/release/app-release.apk
+          BUILD_TOOLS=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          CERT=$("$BUILD_TOOLS/apksigner" verify --print-certs "$APK")
+          echo "$CERT"
+          if echo "$CERT" | grep -q "CN=Android Debug"; then
+            echo "::error::APK is debug-signed. Check the keystore secrets."
+            exit 1
+          fi
+          mv "$APK" "velo-${{ steps.version.outputs.name }}.apk"
+
+      - name: Build the watchapp
+        id: pbw
+        continue-on-error: true
+        run: |
+          pip install pebble-tool
+          pebble sdk install latest
+          cd watchapp && pebble build
+          cp build/*.pbw "../velo-${{ steps.version.outputs.name }}.pbw"
+
+      - name: Publish the release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || format('v{0}', steps.version.outputs.name) }}
+          name: Velo ${{ steps.version.outputs.name }}
+          generate_release_notes: true
+          files: |
+            velo-${{ steps.version.outputs.name }}.apk
+            velo-${{ steps.version.outputs.name }}.pbw
+          fail_on_unmatched_files: false
+          body: |
+            Install the `.apk` on the phone and the `.pbw` on the watch. Both
+            are needed: the watchapp shows the ride, the phone records it.
+
+            The companion app talks to the watch through the official Pebble
+            Android app, which must be installed and paired.
+
+            Tracked by [Obtainium](https://github.com/ImranR98/Obtainium) —
+            point it at this repository and it will pick up future releases.
