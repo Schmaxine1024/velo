@@ -1,0 +1,55 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'org.lianas.velo'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId "org.lianas.velo"
+        // 26 (Android 8) is where the modern foreground-service and background
+        // execution rules begin. Supporting anything older would mean a second
+        // code path for the thing this app exists to do -- keep logging with
+        // the screen off -- for a share of devices that no longer pair with a
+        // Pebble anyway.
+        minSdk 26
+        targetSdk 35
+        versionCode 1
+        versionName "1.0"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    buildFeatures {
+        buildConfig true
+    }
+}
+
+dependencies {
+    implementation 'androidx.appcompat:appcompat:1.7.0'
+    implementation 'com.google.android.material:material:1.12.0'
+    implementation 'androidx.constraintlayout:constraintlayout:2.2.0'
+    implementation 'androidx.recyclerview:recyclerview:1.3.2'
+
+    testImplementation 'junit:junit:4.13.2'
+
+    // Note: PebbleKit is NOT a dependency. It was published to jcenter, which
+    // is gone, so the (MIT-licensed) source is vendored under
+    // src/main/java/com/getpebble/android/kit/ instead. Vendoring also let the
+    // exact intent actions be read rather than guessed.
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.compilerArgs << "-Xlint:deprecation" << "-Xlint:unchecked"
+}

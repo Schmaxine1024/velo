@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      DayNight so the phone app follows the system. Note this is unrelated to
+      the watch colours in Settings: those describe the watch's screen, which
+      is a reflective LCD in daylight and has entirely different needs.
+    -->
+    <style name="Theme.Velo" parent="Theme.Material3.DayNight">
+        <item name="colorPrimary">@color/velo_orange</item>
+        <item name="colorOnPrimary">@android:color/white</item>
+        <item name="colorSecondary">@color/velo_orange</item>
+    </style>
+</resources>

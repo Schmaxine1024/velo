@@ -1,0 +1,16 @@
+# Build output
+watchapp/build/
+watchapp/.lock-waf_*
+android/build/
+android/app/build/
+android/.gradle/
+android/local.properties
+
+# fmtcheck's compiled binary. c-output.txt IS tracked: FormatTest.java is
+# generated from it, so it is the provenance of those expectations.
+tools/fmtcheck/fmtcheck
+
+# The icon generator's outputs ARE tracked (they are build inputs); its
+# bytecode cache is not.
+__pycache__/
+*.pyc

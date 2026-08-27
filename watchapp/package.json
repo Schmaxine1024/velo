@@ -1,0 +1,55 @@
+{
+  "name": "velo",
+  "author": "schmaxine1024",
+  "version": "1.0.0",
+  "keywords": [
+    "pebble-app"
+  ],
+  "private": true,
+  "dependencies": {},
+  "pebble": {
+    "displayName": "Velo",
+    "uuid": "2aa3462c-9d71-4dae-b4c2-bc9a99d032d6",
+    "sdkVersion": "3",
+    "enableMultiJS": false,
+    "capabilities": [],
+    "targetPlatforms": [
+      "basalt",
+      "chalk",
+      "diorite",
+      "emery"
+    ],
+    "watchapp": {
+      "watchface": false
+    },
+    "messageKeys": {
+      "T_DISTANCE": 1,
+      "T_SPEED": 2,
+      "T_ASCENT": 3,
+      "T_FIX": 4,
+      "T_STATE": 5,
+      "T_MAXSPEED": 6,
+      "T_PHONEBATT": 7,
+      "T_UNITS": 8,
+      "T_MOVING": 9,
+      "T_VERSION": 10,
+      "T_START": 11,
+      "T_COL_BG": 12,
+      "T_COL_ACCENT": 13,
+      "T_RIDE_ID": 14,
+      "C_CMD": 20,
+      "C_MOVING": 21,
+      "C_RIDE_ID": 22
+    },
+    "resources": {
+      "media": [
+        {
+          "type": "bitmap",
+          "name": "IMAGE_MENU_ICON",
+          "file": "images/menu_icon.png",
+          "menuIcon": true
+        }
+      ]
+    }
+  }
+}
