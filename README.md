@@ -1,10 +1,10 @@
 # Velo
 
 GPS Cycling companion for pebble smartwatches that tracks metrics such as
--Current speed
--Distance
--Ascent
--Ride History
+- Current speed
+- Distance
+- Ascent
+- Ride History
 
 Works natively on your phone and watch with no accounts required.
 
