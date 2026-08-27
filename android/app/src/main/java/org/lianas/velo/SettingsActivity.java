@@ -9,7 +9,7 @@ import android.os.Bundle;
 import android.os.IBinder;
 import android.view.View;
 import android.widget.LinearLayout;
-import android.widget.RadioButton;
+import android.widget.RadioGroup;
 import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
@@ -59,7 +59,7 @@ public class SettingsActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_settings);
-        setTitle(R.string.settings);
+        ViewInsets.applySystemBars(findViewById(R.id.root));
 
         settings = new Settings(this);
         preview = findViewById(R.id.preview);
@@ -67,22 +67,17 @@ public class SettingsActivity extends AppCompatActivity {
         bgRow = findViewById(R.id.bg_swatches);
         accentRow = findViewById(R.id.accent_swatches);
 
-        RadioButton metric = findViewById(R.id.units_metric);
-        RadioButton imperial = findViewById(R.id.units_imperial);
-        metric.setChecked(!settings.isImperial());
-        imperial.setChecked(settings.isImperial());
-
-        metric.setOnCheckedChangeListener((v, checked) -> {
-            if (checked) {
-                settings.setUnits(Protocol.UNITS_METRIC);
-                onSettingsChanged();
-            }
-        });
-        imperial.setOnCheckedChangeListener((v, checked) -> {
-            if (checked) {
-                settings.setUnits(Protocol.UNITS_IMPERIAL);
-                onSettingsChanged();
-            }
+        // One listener on the group, not one per button. With per-button
+        // listeners every tap fires twice -- once with checked=false for the
+        // button being cleared, once with true for the new one -- and the
+        // whole thing only works because both handlers guard on `checked`.
+        // The group tells you the winner directly.
+        RadioGroup units = findViewById(R.id.units_group);
+        units.check(settings.isImperial() ? R.id.units_imperial : R.id.units_metric);
+        units.setOnCheckedChangeListener((group, checkedId) -> {
+            settings.setUnits(checkedId == R.id.units_imperial
+                    ? Protocol.UNITS_IMPERIAL : Protocol.UNITS_METRIC);
+            onSettingsChanged();
         });
 
         MaterialSwitch autoPause = findViewById(R.id.switch_autopause);
@@ -163,12 +158,17 @@ public class SettingsActivity extends AppCompatActivity {
         preview.setColors(bg, accent);
         preview.setImperial(settings.isImperial());
 
-        // Say it plainly when a choice will not survive. Silently substituting
-        // would leave the rider wondering why the watch ignored them.
+        // Say it plainly when a choice will not survive, and say what to do
+        // about it. The old wording explained the rejection but left the rider
+        // with no move -- which reads as "white is not available" when in fact
+        // white is a fine accent, just not on a pale background.
         if (WatchTheme.accentRejected(bg, accent)) {
             accentWarning.setVisibility(View.VISIBLE);
-            accentWarning.setText("That accent is too close to the background, "
-                    + "so the watch will use plain text instead.");
+            accentWarning.setText(WatchTheme.isDark(bg)
+                    ? "Too close to the background to read. Pick a lighter "
+                      + "accent, or a lighter background."
+                    : "Too close to the background to read. Pick a darker "
+                      + "accent, or a darker background.");
         } else {
             accentWarning.setVisibility(View.GONE);
         }

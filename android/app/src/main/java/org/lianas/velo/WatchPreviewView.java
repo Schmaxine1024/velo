@@ -3,6 +3,7 @@ package org.lianas.velo;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Paint;
+import android.graphics.RectF;
 import android.util.AttributeSet;
 import android.view.View;
 
@@ -11,14 +12,31 @@ import android.view.View;
  * colours.
  *
  * <p>Worth the code: colour choices on a phone screen are a poor predictor of a
- * reflective LCD, and more importantly the watch *derives* three of its five
- * colours. Showing a swatch alone would hide the interesting part — that
+ * reflective LCD, and more importantly the watch <em>derives</em> three of its
+ * five colours. Showing a swatch alone would hide the interesting part — that
  * picking a dark background silently flips the text to white, and that a
  * low-contrast accent is rejected outright.
  *
- * <p>Proportions mirror emery (200x228) since that is the reference platform.
+ * <p>Everything below is laid out in <b>emery pixels</b> (200x228) and scaled
+ * to fit, so the constants can be read straight across from ui_ride.c and
+ * ui.h. That matters more than it looks: this preview claims to show what the
+ * watch will do, so when the watch layout changes and this does not, it starts
+ * confidently lying. Keep the two in step.
  */
 public class WatchPreviewView extends View {
+
+    // Mirrors of the watchapp's layout constants. See ui.h / ui_ride.c.
+    private static final float WATCH_W = 200f;
+    private static final float WATCH_H = 228f;
+    private static final float STATUS_H = 26f;
+    private static final float PANEL_INSET = 4f;
+    private static final float PANEL_GAP = 7f;
+    private static final float PANEL_RADIUS = 10f;
+    private static final float HERO_FRACTION = 0.52f;
+
+    private static final float FONT_HERO = 42f;
+    private static final float FONT_VALUE = 30f;
+    private static final float FONT_LABEL = 18f;
 
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
@@ -26,8 +44,12 @@ public class WatchPreviewView extends View {
     private int accent = Settings.DEFAULT_ACCENT;
     private boolean imperial;
 
+    /** Watch pixels to view pixels. */
+    private float s = 1f;
+
     public WatchPreviewView(Context c, AttributeSet a) {
         super(c, a);
+        paint.setFakeBoldText(true);
     }
 
     public void setColors(int bg, int accent) {
@@ -43,84 +65,120 @@ public class WatchPreviewView extends View {
 
     @Override
     protected void onMeasure(int widthSpec, int heightSpec) {
-        // Lock to the watch's 200:228 aspect so the preview is not a lie about
-        // how much room the layout has.
+        // Locked to the watch's aspect so the preview is not a lie about how
+        // much room the layout actually has.
         int w = MeasureSpec.getSize(widthSpec);
-        int h = Math.round(w * 228f / 200f);
-        setMeasuredDimension(w, h);
+        setMeasuredDimension(w, Math.round(w * WATCH_H / WATCH_W));
     }
 
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
 
-        int ink = WatchTheme.ink(bg);
-        int muted = WatchTheme.muted(bg);
-        int rule = WatchTheme.rule(bg);
-        int hero = WatchTheme.effectiveAccent(bg, accent);
+        s = getWidth() / WATCH_W;
 
-        float w = getWidth();
-        float h = getHeight();
+        final int ink = WatchTheme.ink(bg);
+        final int muted = WatchTheme.muted(bg);
+        final int on = onAccent();
 
         paint.setStyle(Paint.Style.FILL);
         paint.setColor(WatchTheme.opaque(bg));
-        canvas.drawRect(0, 0, w, h, paint);
+        canvas.drawRect(0, 0, getWidth(), getHeight(), paint);
 
-        float statusH = h * 20f / 228f;
-        float heroH = (h - statusH) * 0.38f;
-        float gridTop = statusH + heroH;
-        float rowH = (h - gridTop) / 2f;
+        // ---- Status band: full bleed, square corners --------------------
+        paint.setColor(WatchTheme.opaque(WatchTheme.effectiveAccent(bg, accent)));
+        canvas.drawRect(0, 0, getWidth(), STATUS_H * s, paint);
 
-        // Status bar: fix bars, REC, battery.
-        paint.setColor(WatchTheme.opaque(ink));
-        float barW = w * 0.015f;
-        for (int i = 0; i < 3; i++) {
-            float bh = statusH * (0.25f + i * 0.18f);
-            float bx = w * 0.04f + i * (barW * 1.8f);
-            canvas.drawRect(bx, statusH * 0.75f - bh, bx + barW, statusH * 0.75f, paint);
+        drawFixBars(canvas, PANEL_INSET * s + 1, on);
+        text(canvas, "REC", getWidth() / 2f, FONT_LABEL, on, Paint.Align.CENTER,
+             STATUS_H * s * 0.72f);
+        text(canvas, "76%", getWidth() - PANEL_INSET * s - 1, FONT_LABEL, on,
+             Paint.Align.RIGHT, STATUS_H * s * 0.72f);
+
+        // ---- Hero: a rounded card floating below the band ---------------
+        float rest = WATCH_H - STATUS_H;
+        float heroH = rest * HERO_FRACTION;
+        RectF hero = new RectF(
+                PANEL_INSET * s,
+                (STATUS_H + PANEL_GAP) * s,
+                (WATCH_W - PANEL_INSET) * s,
+                (STATUS_H + heroH - 2) * s);
+
+        paint.setColor(WatchTheme.opaque(WatchTheme.effectiveAccent(bg, accent)));
+        canvas.drawRoundRect(hero, PANEL_RADIUS * s, PANEL_RADIUS * s, paint);
+
+        metric(canvas, hero, "SPEED " + Format.speedUnit(imperial).toUpperCase(),
+               imperial ? "18.6" : "29.9", FONT_HERO, on, on);
+
+        // ---- Two cells, separated by whitespace and nothing else --------
+        float cellTop = (STATUS_H + heroH) * s;
+        float cellH = getHeight() - cellTop;
+        float colW = getWidth() / 2f;
+
+        metric(canvas, new RectF(0, cellTop, colW, cellTop + cellH),
+               "DIST " + Format.distanceUnit(imperial).toUpperCase(),
+               imperial ? "8.42" : "13.55", FONT_VALUE, muted, ink);
+
+        metric(canvas, new RectF(colW, cellTop, getWidth(), cellTop + cellH),
+               "TIME", "0:41", FONT_VALUE, muted, ink);
+    }
+
+    /**
+     * Ink for text sitting on the accent.
+     *
+     * <p>Mirrors theme.c: when the accent is rejected for poor contrast the
+     * panel is drawn in ink instead, so the text on it has to become the
+     * background colour rather than the accent's own opposite.
+     */
+    private int onAccent() {
+        if (WatchTheme.accentRejected(bg, accent)) {
+            return bg;
         }
-        drawText(canvas, "REC", w / 2, statusH * 0.72f, statusH * 0.6f, ink, Paint.Align.CENTER);
-        drawText(canvas, "76%", w * 0.96f, statusH * 0.72f, statusH * 0.6f, muted, Paint.Align.RIGHT);
-
-        paint.setColor(WatchTheme.opaque(rule));
-        paint.setStrokeWidth(Math.max(1f, w / 200f));
-        canvas.drawLine(0, statusH, w, statusH, paint);
-
-        // Hero.
-        drawText(canvas, "SPEED " + Format.speedUnit(imperial).toUpperCase(),
-                w / 2, statusH + heroH * 0.34f, h * 0.045f, muted, Paint.Align.CENTER);
-        drawText(canvas, imperial ? "18.6" : "29.9",
-                w / 2, statusH + heroH * 0.86f, h * 0.19f, hero, Paint.Align.CENTER);
-
-        paint.setColor(WatchTheme.opaque(rule));
-        canvas.drawLine(0, gridTop, w, gridTop, paint);
-        canvas.drawLine(w / 2, gridTop, w / 2, h, paint);
-        canvas.drawLine(0, gridTop + rowH, w, gridTop + rowH, paint);
-
-        // Grid cells.
-        drawCell(canvas, "DIST " + Format.distanceUnit(imperial).toUpperCase(),
-                imperial ? "8.42" : "13.55",
-                w * 0.25f, gridTop, rowH, muted, ink, h);
-        drawCell(canvas, "TIME", "0:41:12", w * 0.75f, gridTop, rowH, muted, ink, h);
-        drawCell(canvas, "AVG " + Format.speedUnit(imperial).toUpperCase(),
-                imperial ? "16.1" : "25.9", w * 0.25f, gridTop + rowH, rowH, muted, ink, h);
-        drawCell(canvas, "ASCENT " + Format.ascentUnit(imperial).toUpperCase(),
-                imperial ? "1049" : "320", w * 0.75f, gridTop + rowH, rowH, muted, ink, h);
+        return WatchTheme.luma(accent) < 145 ? 0xFFFFFF : 0x000000;
     }
 
-    private void drawCell(Canvas canvas, String label, String value, float cx,
-                          float top, float rowH, int muted, int ink, float h) {
-        drawText(canvas, label, cx, top + rowH * 0.36f, h * 0.04f, muted, Paint.Align.CENTER);
-        drawText(canvas, value, cx, top + rowH * 0.78f, h * 0.085f, ink, Paint.Align.CENTER);
+    /** Label above value, the pair centred as a block. Mirrors ui_draw_metric. */
+    private void metric(Canvas canvas, RectF box, String label, String value,
+                        float valueSize, int labelColour, int valueColour) {
+        paint.setTextAlign(Paint.Align.CENTER);
+
+        paint.setTextSize(FONT_LABEL * s);
+        Paint.FontMetrics lm = paint.getFontMetrics();
+        float labelH = lm.descent - lm.ascent;
+
+        paint.setTextSize(valueSize * s);
+        Paint.FontMetrics vm = paint.getFontMetrics();
+        float valueH = vm.descent - vm.ascent;
+
+        float top = box.top + (box.height() - (labelH + valueH)) / 2f;
+        float cx = box.centerX();
+
+        paint.setTextSize(FONT_LABEL * s);
+        paint.setColor(WatchTheme.opaque(labelColour));
+        canvas.drawText(label, cx, top - lm.ascent, paint);
+
+        paint.setTextSize(valueSize * s);
+        paint.setColor(WatchTheme.opaque(valueColour));
+        canvas.drawText(value, cx, top + labelH - vm.ascent, paint);
     }
 
-    private void drawText(Canvas canvas, String text, float x, float y, float size,
-                          int color, Paint.Align align) {
+    private void drawFixBars(Canvas canvas, float x, int colour) {
         paint.setStyle(Paint.Style.FILL);
-        paint.setColor(WatchTheme.opaque(color));
-        paint.setTextSize(size);
+        paint.setColor(WatchTheme.opaque(colour));
+        float barW = 4 * s, gap = 2 * s, maxH = 12 * s;
+        float baseline = STATUS_H * s / 2f + maxH / 2f;
+        for (int i = 0; i < 3; i++) {
+            float h = (5 + i * 4) * s;
+            canvas.drawRect(x + i * (barW + gap), baseline - h,
+                            x + i * (barW + gap) + barW, baseline, paint);
+        }
+    }
+
+    private void text(Canvas canvas, String str, float x, float sizeWatchPx,
+                      int colour, Paint.Align align, float baseline) {
         paint.setTextAlign(align);
-        paint.setFakeBoldText(true);
-        canvas.drawText(text, x, y, paint);
+        paint.setTextSize(sizeWatchPx * s);
+        paint.setColor(WatchTheme.opaque(colour));
+        canvas.drawText(str, x, baseline, paint);
     }
 }

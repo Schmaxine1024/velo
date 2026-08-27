@@ -14,3 +14,6 @@ tools/fmtcheck/fmtcheck
 # bytecode cache is not.
 __pycache__/
 *.pyc
+
+# Crash logs dropped in for diagnosis; not source.
+Velo log *.txt

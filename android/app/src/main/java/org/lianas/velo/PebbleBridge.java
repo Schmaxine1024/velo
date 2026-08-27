@@ -2,8 +2,12 @@ package org.lianas.velo;
 
 import android.content.BroadcastReceiver;
 import android.content.Context;
+import android.content.IntentFilter;
 import android.util.Log;
 
+import androidx.core.content.ContextCompat;
+
+import com.getpebble.android.kit.Constants;
 import com.getpebble.android.kit.PebbleKit;
 import com.getpebble.android.kit.util.PebbleDictionary;
 
@@ -49,16 +53,32 @@ public class PebbleBridge {
     // ---- Lifecycle -------------------------------------------------------
 
     public void start() {
-        receiver = PebbleKit.registerReceivedDataHandler(context,
-                new PebbleKit.PebbleDataReceiver(Protocol.WATCHAPP_UUID) {
-                    @Override
-                    public void receiveData(Context ctx, int transactionId, PebbleDictionary data) {
-                        // The watch's AppMessage will time out if this is not
-                        // acknowledged, so ack first and interpret afterwards.
-                        PebbleKit.sendAckToPebble(ctx, transactionId);
-                        handleCommand(data);
-                    }
-                });
+        receiver = new PebbleKit.PebbleDataReceiver(Protocol.WATCHAPP_UUID) {
+            @Override
+            public void receiveData(Context ctx, int transactionId, PebbleDictionary data) {
+                // The watch's AppMessage will time out if this is not
+                // acknowledged, so ack first and interpret afterwards.
+                PebbleKit.sendAckToPebble(ctx, transactionId);
+                handleCommand(data);
+            }
+        };
+
+        // Registered here rather than via PebbleKit.registerReceivedDataHandler.
+        //
+        // That helper dates from 2016 and calls registerReceiver(receiver,
+        // filter) with no export flag. Since Android 14 that is a hard
+        // SecurityException for any receiver not listening exclusively to
+        // system broadcasts, so the helper takes the whole app down the instant
+        // the service is created. The fix belongs here, in our code, rather
+        // than as a patch to the vendored source.
+        //
+        // EXPORTED, not NOT_EXPORTED: the broadcast we are waiting for comes
+        // from the Pebble app, a different UID. NOT_EXPORTED would register
+        // cleanly and then silently never receive anything, which is a worse
+        // failure than the crash.
+        ContextCompat.registerReceiver(context, receiver,
+                new IntentFilter(Constants.INTENT_APP_RECEIVE),
+                ContextCompat.RECEIVER_EXPORTED);
     }
 
     public void stop() {

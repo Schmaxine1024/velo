@@ -16,19 +16,17 @@ typedef enum {
 
 #define METRIC_COUNT  5
 
-// On a rectangular screen only these three are worth the hero slot; average
-// and ascent are reference numbers you glance at, not ones you ride to, and
-// the grid below shows them permanently.
-//
-// Round screens cannot carry that grid -- it has two cells, not four -- so
-// there the hero cycles all five instead. Otherwise ascent and average would
-// be unreachable on chalk: never in the grid, never promotable to hero.
-#define HERO_COUNT  PBL_IF_RECT_ELSE(3, METRIC_COUNT)
+// Every metric can take the hero slot, on every platform. The screen shows
+// three at a time rather than five, so anything not currently visible has to
+// be reachable by cycling or it may as well not exist.
+#define HERO_COUNT  METRIC_COUNT
 
-// Round screens cannot carry a 2x2 grid -- the corner cells fall off the
-// curve -- so they show a single column of two.
-#define GRID_COLS  PBL_IF_RECT_ELSE(2, 1)
-#define GRID_CELLS PBL_IF_RECT_ELSE(4, 2)
+// Two secondary cells, side by side, and that is the lot.
+//
+// This used to be a 2x2 grid of four, which fitted but meant five numbers on
+// a 200px screen in type small enough to need looking *at* rather than
+// glancing at. Three big ones beat five cramped ones on a bouncing handlebar.
+#define GRID_CELLS  2
 
 static Window  *s_window;
 static Layer   *s_canvas;
@@ -86,18 +84,13 @@ static void render_metric(Metric m, const RideState *r,
   }
 }
 
-// Which metrics fill the grid: the first GRID_CELLS of the full list that are
-// not currently the hero. Keeping the hero out avoids showing the same number
-// twice at two different sizes.
-//
-// On a rectangle that lands on exactly the old behaviour -- the two remaining
-// of speed/dist/time, then average and ascent.
+// Which metrics fill the two cells: the next ones after the hero, wrapping.
+// Keeping the hero out avoids showing the same number twice at two sizes, and
+// walking forward from it means cycling the hero rotates the whole set rather
+// than reshuffling it unpredictably.
 static void grid_metrics(Metric out[GRID_CELLS]) {
-  int n = 0;
-  for (int m = 0; m < METRIC_COUNT && n < GRID_CELLS; m++) {
-    if (m != s_hero) {
-      out[n++] = (Metric)m;
-    }
+  for (int n = 0; n < GRID_CELLS; n++) {
+    out[n] = (Metric)((s_hero + 1 + n) % METRIC_COUNT);
   }
 }
 
@@ -114,45 +107,40 @@ static void canvas_update(Layer *layer, GContext *ctx) {
 
   int16_t top = ui_draw_status(ctx, bounds, r, true);
 
-  int16_t rest    = bounds.size.h - (top - bounds.origin.y);
-  int16_t hero_h  = rest * 38 / 100;
-  int16_t grid_h  = rest - hero_h;
-  int16_t rows    = GRID_CELLS / GRID_COLS;
-  int16_t row_h   = grid_h / rows;
-  int16_t col_w   = bounds.size.w / GRID_COLS;
+  int16_t rest   = bounds.size.h - (top - bounds.origin.y);
+  int16_t hero_h = rest * 52 / 100;   // the hero gets over half the screen
+  int16_t cell_h = rest - hero_h;
+  int16_t col_w  = bounds.size.w / GRID_CELLS;
 
   const char *label, *unit;
   char value[16];
 
-  render_metric((Metric)s_hero, r, &label, value, sizeof(value), &unit);
-  ui_draw_metric(ctx, GRect(bounds.origin.x, top, bounds.size.w, hero_h),
-                 label, value, unit, ui_font_hero(), COL_ACCENT);
+  // The hero is a filled panel, not text on the background. This is the one
+  // number you read while moving, and a block of colour finds your eye before
+  // you have focused on anything.
+  //
+  // theme_on_accent() rather than a fixed white: the accent is the rider's
+  // choice, and on a pale one white text would vanish. It also keeps diorite
+  // honest, where the accent collapses to black.
+  GRect hero = GRect(bounds.origin.x + PANEL_INSET, top + PANEL_GAP,
+                     bounds.size.w - 2 * PANEL_INSET, hero_h - PANEL_GAP - 2);
+  ui_fill(ctx, hero, COL_ACCENT, PANEL_RADIUS);
 
-  graphics_context_set_stroke_color(ctx, COL_RULE);
-  graphics_draw_line(ctx, GPoint(bounds.origin.x, top + hero_h),
-                     GPoint(bounds.origin.x + bounds.size.w, top + hero_h));
+  GColor on = theme_on_accent();
+  render_metric((Metric)s_hero, r, &label, value, sizeof(value), &unit);
+  ui_draw_metric(ctx, hero, label, value, unit, ui_font_hero(), on, on);
 
   Metric cells[GRID_CELLS];
   grid_metrics(cells);
 
+  // No divider between the cells, and no rules anywhere. Whitespace separates
+  // them perfectly well at this size, and every hairline removed is one less
+  // thing competing with the numbers for attention.
   for (int i = 0; i < GRID_CELLS; i++) {
-    int16_t cx = bounds.origin.x + (i % GRID_COLS) * col_w;
-    int16_t cy = top + hero_h + (i / GRID_COLS) * row_h;
-
+    GRect cell = GRect(bounds.origin.x + i * col_w, top + hero_h, col_w, cell_h);
     render_metric(cells[i], r, &label, value, sizeof(value), &unit);
-    ui_draw_metric(ctx, GRect(cx, cy, col_w, row_h),
-                   label, value, unit, ui_font_value(), COL_INK);
-  }
-
-  // Grid rules, drawn after the cells so they sit on top of any overshoot.
-  graphics_context_set_stroke_color(ctx, COL_RULE);
-  for (int c = 1; c < GRID_COLS; c++) {
-    graphics_draw_line(ctx, GPoint(bounds.origin.x + c * col_w, top + hero_h),
-                       GPoint(bounds.origin.x + c * col_w, bounds.origin.y + bounds.size.h));
-  }
-  for (int rw = 1; rw < rows; rw++) {
-    graphics_draw_line(ctx, GPoint(bounds.origin.x, top + hero_h + rw * row_h),
-                       GPoint(bounds.origin.x + bounds.size.w, top + hero_h + rw * row_h));
+    ui_draw_metric(ctx, cell, label, value, unit, ui_font_value(),
+                   COL_MUTED, COL_INK);
   }
 }
 

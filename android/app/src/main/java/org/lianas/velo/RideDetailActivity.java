@@ -36,6 +36,7 @@ public class RideDetailActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_ride_detail);
+        ViewInsets.applySystemBars(findViewById(R.id.root));
 
         store = new RideStore(this);
         settings = new Settings(this);
@@ -47,8 +48,9 @@ public class RideDetailActivity extends AppCompatActivity {
             return;
         }
 
-        setTitle(DateFormat.getDateInstance(DateFormat.MEDIUM)
-                .format(new Date(ride.startTimeMs)));
+        ((TextView) findViewById(R.id.title)).setText(
+                DateFormat.getDateInstance(DateFormat.MEDIUM)
+                        .format(new Date(ride.startTimeMs)));
 
         // The system picker: the file lands wherever the rider chooses, and the
         // app needs no storage permission to put it there.

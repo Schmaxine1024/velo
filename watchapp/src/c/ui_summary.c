@@ -23,20 +23,40 @@ static void canvas_update(Layer *layer, GContext *ctx) {
   // companion closed produces a genuinely empty ride. Saying so plainly beats
   // rendering a grid of zeroes that looks like a recording failure.
   if (!s_have) {
-    graphics_context_set_text_color(ctx, COL_ACCENT);
-    graphics_draw_text(ctx, "Nothing recorded", ui_font_value(),
-                       GRect(bounds.origin.x + pad, bounds.origin.y + bounds.size.h / 3,
-                             bounds.size.w - 2 * pad, 60),
-                       GTextOverflowModeWordWrap, GTextAlignmentCenter, NULL);
     // Deliberately not "the phone was not connected": since link state and
     // data freshness became separate things, the commonest way to reach this
     // screen is a phone that is connected but whose companion app never sent
     // anything. Naming the symptom covers both causes without guessing.
+    const char *head = "Nothing recorded";
+    const char *body = "No data came from the phone";
+
+    GFont hf = ui_font_value();
+    GFont bf = ui_font_label();
+
+    int16_t w = bounds.size.w - 2 * pad;
+    GRect measure = GRect(0, 0, w, bounds.size.h);
+
+    // Measured and stacked rather than placed at fixed offsets. The old
+    // version put the body at a hard-coded +46 from a third of the way down,
+    // which was tuned against the small label font -- once the type grew, the
+    // heading wrapped to two lines and the two ran into each other.
+    GSize hs = graphics_text_layout_get_content_size(
+        head, hf, measure, GTextOverflowModeWordWrap, GTextAlignmentCenter);
+    GSize bs = graphics_text_layout_get_content_size(
+        body, bf, measure, GTextOverflowModeWordWrap, GTextAlignmentCenter);
+
+    const int16_t gap = 12;
+    int16_t total = hs.h + gap + bs.h;
+    int16_t y = bounds.origin.y + (bounds.size.h - total) / 2;
+
+    graphics_context_set_text_color(ctx, COL_ACCENT);
+    graphics_draw_text(ctx, head, hf,
+                       GRect(bounds.origin.x + pad, y, w, hs.h + 4),
+                       GTextOverflowModeWordWrap, GTextAlignmentCenter, NULL);
+
     graphics_context_set_text_color(ctx, COL_MUTED);
-    graphics_draw_text(ctx, "No data came from the phone", ui_font_label(),
-                       GRect(bounds.origin.x + pad,
-                             bounds.origin.y + bounds.size.h / 3 + 46,
-                             bounds.size.w - 2 * pad, 40),
+    graphics_draw_text(ctx, body, bf,
+                       GRect(bounds.origin.x + pad, y + hs.h + gap, w, bs.h + 4),
                        GTextOverflowModeWordWrap, GTextAlignmentCenter, NULL);
     return;
   }
@@ -49,13 +69,9 @@ static void canvas_update(Layer *layer, GContext *ctx) {
 
   graphics_context_set_text_color(ctx, COL_INK);
   graphics_draw_text(ctx, date, ui_font_label(),
-                     GRect(bounds.origin.x, bounds.origin.y + 2, bounds.size.w, 18),
+                     GRect(bounds.origin.x, bounds.origin.y + 3, bounds.size.w, FOOTER_H),
                      GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
 
-  int16_t rule_y = bounds.origin.y + STATUS_H - 1;
-  graphics_context_set_stroke_color(ctx, COL_RULE);
-  graphics_draw_line(ctx, GPoint(bounds.origin.x, rule_y),
-                     GPoint(bounds.origin.x + bounds.size.w, rule_y));
 
   // ---- Five numbers ------------------------------------------------------
   //
@@ -63,7 +79,10 @@ static void canvas_update(Layer *layer, GContext *ctx) {
   // max pair naturally on one row. Ascent gets the full width at the bottom
   // rather than a half cell with an empty twin beside it.
   int16_t top    = bounds.origin.y + STATUS_H;
-  int16_t rest   = bounds.size.h - STATUS_H - 18;   // leave room for the hint
+  // The footer reserve has to match the label font's line height, not the
+  // 18px it used to be -- the labels went up a size and "Saved" lost its
+  // descender off the bottom of the screen.
+  int16_t rest   = bounds.size.h - STATUS_H - FOOTER_H;
   int16_t row_h  = rest / 3;
   int16_t col_w  = bounds.size.w / 2;
 
@@ -79,26 +98,23 @@ static void canvas_update(Layer *layer, GContext *ctx) {
   }
   fmt_speed(avg, sizeof(avg), avg_cms, imp);
 
-  ui_draw_metric(ctx, GRect(bounds.origin.x, top, col_w, row_h),
-                 "DIST", dist, fmt_distance_unit(imp), ui_font_value(), COL_ACCENT);
+  // Inset within its cell so the card has air around it and does not run into
+  // the date above or the edge of the screen beside it.
+  GRect dist_box = GRect(bounds.origin.x + PANEL_INSET, top + 3,
+                         col_w - 2 * PANEL_INSET, row_h - 6);
+  ui_fill(ctx, dist_box, COL_ACCENT, PANEL_RADIUS);
+  ui_draw_metric(ctx, dist_box, "DIST", dist, fmt_distance_unit(imp),
+                 ui_font_value(), theme_on_accent(), theme_on_accent());
   ui_draw_metric(ctx, GRect(bounds.origin.x + col_w, top, col_w, row_h),
-                 "TIME", dur, NULL, ui_font_value(), COL_INK);
+                 "TIME", dur, NULL, ui_font_value(), COL_MUTED, COL_INK);
 
   ui_draw_metric(ctx, GRect(bounds.origin.x, top + row_h, col_w, row_h),
-                 "AVG", avg, fmt_speed_unit(imp), ui_font_value(), COL_INK);
+                 "AVG", avg, fmt_speed_unit(imp), ui_font_value(), COL_MUTED, COL_INK);
   ui_draw_metric(ctx, GRect(bounds.origin.x + col_w, top + row_h, col_w, row_h),
-                 "MAX", mx, fmt_speed_unit(imp), ui_font_value(), COL_INK);
+                 "MAX", mx, fmt_speed_unit(imp), ui_font_value(), COL_MUTED, COL_INK);
 
   ui_draw_metric(ctx, GRect(bounds.origin.x, top + 2 * row_h, bounds.size.w, row_h),
-                 "ASCENT", asc, fmt_ascent_unit(imp), ui_font_value(), COL_INK);
-
-  graphics_context_set_stroke_color(ctx, COL_RULE);
-  graphics_draw_line(ctx, GPoint(bounds.origin.x + col_w, top),
-                     GPoint(bounds.origin.x + col_w, top + 2 * row_h));
-  graphics_draw_line(ctx, GPoint(bounds.origin.x, top + row_h),
-                     GPoint(bounds.origin.x + bounds.size.w, top + row_h));
-  graphics_draw_line(ctx, GPoint(bounds.origin.x, top + 2 * row_h),
-                     GPoint(bounds.origin.x + bounds.size.w, top + 2 * row_h));
+                 "ASCENT", asc, fmt_ascent_unit(imp), ui_font_value(), COL_MUTED, COL_INK);
 
   // ---- Footer ------------------------------------------------------------
   graphics_context_set_text_color(ctx, COL_MUTED);
@@ -109,8 +125,8 @@ static void canvas_update(Layer *layer, GContext *ctx) {
                      s_from_history ? "SELECT to close" : "Saved",
                      ui_font_label(),
                      GRect(bounds.origin.x + pad,
-                           bounds.origin.y + bounds.size.h - 18,
-                           bounds.size.w - 2 * pad, 18),
+                           bounds.origin.y + bounds.size.h - FOOTER_H,
+                           bounds.size.w - 2 * pad, FOOTER_H),
                      GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
 }
 

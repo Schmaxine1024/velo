@@ -67,6 +67,7 @@ public class MainActivity extends AppCompatActivity implements RideService.RideL
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        ViewInsets.applySystemBars(findViewById(R.id.root));
 
         settings = new Settings(this);
 

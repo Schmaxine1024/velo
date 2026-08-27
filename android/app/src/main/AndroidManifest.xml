@@ -17,6 +17,23 @@
 
     <uses-feature android:name="android.hardware.location.gps" android:required="true" />
 
+    <!--
+      Package visibility. Since Android 11 an app cannot see another app's
+      content provider unless it declares it here.
+
+      PebbleKit.isWatchConnected() reads the Pebble app's state provider, so
+      without this it returns null and the UI reports "watch not connected"
+      forever, with no error and nothing in the log to explain it. The two
+      authorities are the pre- and post-Basalt ones; the package names cover
+      the original Pebble app and the Rebble build, which kept them.
+    -->
+    <queries>
+        <package android:name="com.getpebble.android.basalt" />
+        <package android:name="com.getpebble.android" />
+        <provider android:authorities="com.getpebble.android.provider" />
+        <provider android:authorities="com.getpebble.android.provider.basalt" />
+    </queries>
+
     <application
         android:allowBackup="true"
         android:label="@string/app_name"

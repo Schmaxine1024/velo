@@ -4,10 +4,31 @@
       DayNight so the phone app follows the system. Note this is unrelated to
       the watch colours in Settings: those describe the watch's screen, which
       is a reflective LCD in daylight and has entirely different needs.
+
+      NoActionBar deliberately. targetSdk 35 forces edge-to-edge on Android 15,
+      and the stock ActionBar lands underneath the status bar there, which is
+      what put the first line of every screen under the clock. Each layout
+      carries its own title and pads itself via ViewInsets instead, which is
+      both predictable and lets the screens look less like a form.
     -->
-    <style name="Theme.Velo" parent="Theme.Material3.DayNight">
+    <style name="Theme.Velo" parent="Theme.Material3.DayNight.NoActionBar">
         <item name="colorPrimary">@color/velo_orange</item>
         <item name="colorOnPrimary">@android:color/white</item>
         <item name="colorSecondary">@color/velo_orange</item>
+    </style>
+
+    <!--
+      Screen titles, now that there is no ActionBar to carry them.
+
+      parent="" is required, not decorative: a dotted style name implies
+      inheritance from everything before the last dot, so without it AAPT goes
+      looking for a style called "Velo" and fails to link.
+    -->
+    <style name="Velo.Title" parent="">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textSize">28sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:paddingBottom">12dp</item>
     </style>
 </resources>

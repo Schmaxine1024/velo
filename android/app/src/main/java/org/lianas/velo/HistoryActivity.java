@@ -27,7 +27,7 @@ public class HistoryActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_history);
-        setTitle(R.string.history);
+        ViewInsets.applySystemBars(findViewById(R.id.root));
 
         store = new RideStore(this);
         settings = new Settings(this);

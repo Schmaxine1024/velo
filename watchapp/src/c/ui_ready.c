@@ -26,12 +26,13 @@ static void canvas_update(Layer *layer, GContext *ctx) {
   // The status bar already carries the fix bars, but three small bars are a
   // poor thing to squint at through sunglasses when the question is binary.
   const char *headline;
-  GColor headline_col = COL_ACCENT;
+  GColor headline_col = COL_INK;
+  bool ready = false;
 
   if (r->phone_version != 0 && r->phone_version != PROTOCOL_VERSION) {
     // Version trouble outranks GPS: starting a ride against a companion that
     // speaks a different protocol will misreport rather than simply fail.
-    headline = "APP MISMATCH";
+    headline = "MISMATCH";
   } else if (!r->linked) {
     headline = "NO PHONE";
   } else if (r->fix == FIX_NONE) {
@@ -40,16 +41,29 @@ static void canvas_update(Layer *layer, GContext *ctx) {
     headline = "WEAK GPS";
   } else {
     headline = "READY";
-    headline_col = COL_INK;
+    ready = true;
   }
 
-  int16_t head_h = rest * 34 / 100;
-  ui_draw_metric(ctx, GRect(bounds.origin.x, top, bounds.size.w, head_h),
-                 "VELO", headline, NULL, ui_font_value(), headline_col);
+  int16_t head_h = rest * 38 / 100;
+  // Inset and gapped so the panel floats below the status band rather than
+  // butting into it. Applied whether or not it is filled, so the headline
+  // does not shift position when the state changes.
+  GRect head_box = GRect(bounds.origin.x + PANEL_INSET, top + PANEL_GAP,
+                         bounds.size.w - 2 * PANEL_INSET, head_h - PANEL_GAP);
 
-  graphics_context_set_stroke_color(ctx, COL_RULE);
-  graphics_draw_line(ctx, GPoint(bounds.origin.x, top + head_h),
-                     GPoint(bounds.origin.x + bounds.size.w, top + head_h));
+  // Readiness gets the loud treatment when something is wrong: a full panel
+  // of accent, so "NO GPS" is unmissable before you clip in. When everything
+  // is fine it stays quiet on the background -- an all-clear does not need
+  // shouting, and a screen that is always shouting says nothing.
+  GColor head_label = COL_MUTED;
+  if (!ready) {
+    ui_fill(ctx, head_box, COL_ACCENT, PANEL_RADIUS);
+    headline_col = theme_on_accent();
+    head_label = headline_col;
+  }
+
+  ui_draw_metric(ctx, head_box, "VELO", headline, NULL,
+                 ui_font_hero(), head_label, headline_col);
 
   // ---- Last ride -------------------------------------------------------
   int16_t last_y = top + head_h;
@@ -69,7 +83,7 @@ static void canvas_update(Layer *layer, GContext *ctx) {
     snprintf(label, sizeof(label), "LAST %s", date);
 
     ui_draw_metric(ctx, GRect(bounds.origin.x, last_y, bounds.size.w, last_h),
-                   label, value, NULL, ui_font_value(), COL_INK);
+                   label, value, NULL, ui_font_value(), COL_MUTED, COL_INK);
   } else {
     graphics_context_set_text_color(ctx, COL_MUTED);
     graphics_draw_text(ctx, "No rides yet", ui_font_label(),
@@ -80,14 +94,14 @@ static void canvas_update(Layer *layer, GContext *ctx) {
   }
 
   // ---- Hints -----------------------------------------------------------
-  int16_t hint_y = bounds.origin.y + bounds.size.h - 20;
+  int16_t hint_y = bounds.origin.y + bounds.size.h - FOOTER_H;
   graphics_context_set_text_color(ctx, COL_MUTED);
   graphics_draw_text(ctx,
                      ride_history_count() > 0 ? "SELECT ride   UP history"
                                               : "SELECT to ride",
                      ui_font_label(),
                      GRect(bounds.origin.x + pad, hint_y,
-                           bounds.size.w - 2 * pad, 18),
+                           bounds.size.w - 2 * pad, FOOTER_H),
                      GTextOverflowModeTrailingEllipsis,
                      GTextAlignmentCenter, NULL);
 }
