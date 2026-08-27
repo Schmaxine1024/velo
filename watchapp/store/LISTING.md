@@ -54,13 +54,20 @@ or imperial.
 
 REQUIRES THE VELO ANDROID APP
 This watchapp is one half of Velo. You also need the Velo companion app for
-Android, which does the GPS recording — get it from the project page above.
-iPhone is not supported.
+Android, which does the GPS recording — get it from the project's GitHub
+releases page, linked from this listing. iPhone is not supported.
 
 ---
 
-## Release notes (v1.0.1)
+## Release notes (v1.0.2)
 
-Fixes the watchapp build in the release pipeline, so the .pbw is attached to
-the release again. Ride UI reworked, launch crash fixed, and the layout padded
-for edge-to-edge displays.
+Adds support for Pebble Round 2, and fixes the layout on round watches --
+panels no longer run off the edge of the glass, the status indicators and
+button hints are visible again, and the ride screen's lower readouts are no
+longer cut off.
+
+Fixes a bug where the highlighted distance on the ride summary lost its lower
+half on Pebble Time, Pebble 2 and Pebble Time Round.
+
+Switching between metric and imperial on the phone now reaches the watch
+instead of waiting until the next ride.
