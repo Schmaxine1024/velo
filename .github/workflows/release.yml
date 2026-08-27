@@ -71,7 +71,7 @@ jobs:
         env:
           VELO_KEYSTORE_PATH: ${{ runner.temp }}/velo-release.jks
           VELO_KEYSTORE_PASSWORD: ${{ secrets.VELO_KEYSTORE_PASSWORD }}
-          VELO_KEY_ALIAS: ${{ secrets.VELO_KEY_ALIAS }}
+          VELO_KEY_ALIAS: velo
           VELO_KEY_PASSWORD: ${{ secrets.VELO_KEY_PASSWORD }}
         run: |
           ./gradlew --no-daemon assembleRelease \
@@ -93,14 +93,36 @@ jobs:
           fi
           mv "$APK" "velo-${{ steps.version.outputs.name }}.apk"
 
+      # Deliberately given its own Python. Installing pebble-tool into the
+      # runner's user site leaves its dependency chain resolving pyOpenSSL out
+      # of /usr/lib/python3/dist-packages, which is mismatched against the
+      # system cryptography lib and dies with "module 'lib' has no attribute
+      # 'GEN_EMAIL'". setup-python provides a clean interpreter with no system
+      # dist-packages on the path. This is why the CI job worked and this one
+      # did not.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
       - name: Build the watchapp
         id: pbw
         continue-on-error: true
         run: |
-          pip install pebble-tool
-          pebble sdk install latest
+          pipx install pebble-tool || pip install pebble-tool
+          pebble sdk install latest --no-analytics || pebble sdk install latest
           cd watchapp && pebble build
-          cp build/*.pbw "../velo-${{ steps.version.outputs.name }}.pbw"
+          cp build/*.pbw "$GITHUB_WORKSPACE/velo-${{ steps.version.outputs.name }}.pbw"
+
+      # continue-on-error above reports the step as "success" in the run summary
+      # even when it exited non-zero, so the absence of a pbw was invisible last
+      # time. Say so loudly, without failing the phone release.
+      - name: Note whether the watchapp made it
+        run: |
+          if [ -f "velo-${{ steps.version.outputs.name }}.pbw" ]; then
+            echo "pbw built: $(ls -la velo-*.pbw)"
+          else
+            echo "::warning::Watchapp build failed; this release ships without a .pbw."
+          fi
 
       - name: Publish the release
         uses: softprops/action-gh-release@v2

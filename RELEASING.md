@@ -37,8 +37,12 @@ Actions → New repository secret**:
 |---|---|
 | `VELO_KEYSTORE_BASE64` | contents of `~/claude/pebbles/velo-signing/keystore.base64` |
 | `VELO_KEYSTORE_PASSWORD` | contents of `~/claude/pebbles/velo-signing/password.txt` |
-| `VELO_KEY_ALIAS` | `velo` |
 | `VELO_KEY_PASSWORD` | same as `VELO_KEYSTORE_PASSWORD` |
+
+The key alias is deliberately *not* a secret. It is `velo`, which is not
+sensitive — and making it one taught GitHub to redact the string "velo" from
+every log line in the repo, including filenames, which hid a build failure
+behind a row of asterisks.
 
 The base64 file is one long line with no trailing newline; paste it whole.
 
